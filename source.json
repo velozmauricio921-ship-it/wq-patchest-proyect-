@@ -1,0 +1,303 @@
+{
+  "name": "Worse Query Files",
+  "identifier": "cz.kolbi.wqfiles.source",
+  "subtitle": "File manager for iOS 26 and 27",
+  "description": "AltStore / SideStore source for WQ Files by kolbicz.",
+  "iconURL": "https://raw.githubusercontent.com/kolbicz/WQFiles/main/icons/AppIcon1024.png",
+  "website": "https://github.com/kolbicz/WQFiles",
+  "tintColor": "#1E8FC7",
+  "featuredApps": [
+    "cz.kolbi.wqfiles"
+  ],
+  "apps": [
+    {
+      "name": "WQ Files",
+      "bundleIdentifier": "cz.kolbi.wqfiles",
+      "developerName": "kolbicz",
+      "subtitle": "File manager for iOS 26 and 27 (worse_query)",
+      "localizedDescription": "File browser, app data manager and cache cleaner for iOS 26 and 27, built on the worse_query sandbox technique. No jailbreak and no kernel exploit.\n\n• Browse every app's data container, app groups, extension and daemon containers\n• Plist editor and hex viewer/editor; edits are backed up first\n• Select, move across apps, compress and extract ZIPs; import files and whole folders\n• Syntax highlighting, SQLite viewer and media player\n• Back up, restore and clear app data; AirDrop backups as ZIP\n• Cache cleaner\n• Shortcuts actions for files, cache cleaning and app backups\n\niOS 26 and 27 (tested on 26.7.1, 27.0.1 and 27.2.1; on iOS 26, System Data and System Groups are not available). Needs a signer that keeps the App Group entitlement (AltStore, SideStore or Impactor; not Sideloadly).",
+      "iconURL": "https://raw.githubusercontent.com/kolbicz/WQFiles/main/icons/AppIcon1024.png",
+      "tintColor": "#1E8FC7",
+      "category": "utilities",
+      "versions": [
+        {
+          "version": "0.9.30",
+          "buildVersion": "115",
+          "date": "2026-11-26",
+          "size": 2268148,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.30/WQFiles.ipa",
+          "localizedDescription": "Shortcuts actions for files and apps (list, get, save, copy, move, rename, delete, clean caches, back up), a working update check, and many fixes from a full code review: safer restores and imports, fewer hangs, faster lists.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.20",
+          "buildVersion": "114",
+          "date": "2026-11-21",
+          "size": 2199929,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.20/WQFiles.ipa",
+          "localizedDescription": "Imports Apps Manager backups (.adbk), says when another app is using a file instead of showing errno 35, and keeps an app's database and its -wal/-shm files together.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.19",
+          "buildVersion": "113",
+          "date": "2026-11-20",
+          "size": 2182170,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.19/WQFiles.ipa",
+          "localizedDescription": "Optional App Store icons for other apps (Settings → App Store Icons), fixes apps with one-word bundle ids (like Pinterest) and the empty gap above the Apps list on iOS 27, and keeps the Backups tab working on iOS 27 beta 5.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.18",
+          "buildVersion": "106",
+          "date": "2026-11-17",
+          "size": 2171189,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.18/WQFiles.ipa",
+          "localizedDescription": "Custom inspectors (read-only JavaScript, install from a .zip), your own folders and files in the Cache Cleaner, and Japanese.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.17",
+          "buildVersion": "105",
+          "date": "2026-11-17",
+          "size": 2089006,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.17/WQFiles.ipa",
+          "localizedDescription": "Fixes LiveContainer setups where every folder was refused, SQLite restore with -wal files, lossless SQLite and plist edits, and backups listed newest first.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.16",
+          "buildVersion": "101",
+          "date": "2026-11-16",
+          "size": 2078252,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.16/WQFiles.ipa",
+          "localizedDescription": "Works inside LiveContainer again. Cache Cleaner: Clean is ready after a scan, plus Invert Selection. Wi-Fi uploads stop with sharing.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.15",
+          "buildVersion": "100",
+          "date": "2026-11-16",
+          "size": 2076710,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.15/WQFiles.ipa",
+          "localizedDescription": "Recognizes iOS 27.3 beta 2+, where Apple patched worse_query. The access cache repairs itself when another app in the App Group broke it.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.14",
+          "buildVersion": "99",
+          "date": "2026-11-16",
+          "size": 2071017,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.14/WQFiles.ipa",
+          "localizedDescription": "Show Folder Sizes, empty folder hints, Colored Cards with a pickable color, themed tiles; WQ Files is back in the Files app; fixes wrong app names on iOS 26.5 and the Crash Logs note.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.13",
+          "buildVersion": "96",
+          "date": "2026-11-16",
+          "size": 2053060,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.13/WQFiles.ipa",
+          "localizedDescription": "Apps and Cache Cleaner scans are fast again (more than twice as fast as 0.9.11 and 0.9.12).",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.12",
+          "buildVersion": "94",
+          "date": "2026-11-16",
+          "size": 2053202,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.12/WQFiles.ipa",
+          "localizedDescription": "Wi-Fi Sharing: browse, download and upload files from any browser on the same Wi-Fi. Themes with importable .wqtheme files, Recent folders and files, progress bars, and a fix for a frozen screen.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.11",
+          "buildVersion": "92",
+          "date": "2026-11-15",
+          "size": 1969224,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.11/WQFiles.ipa",
+          "localizedDescription": "Vietnamese translation. Apps and Clean scans keep running across tabs and app restarts, with Pause/Resume and a spinner or clock in the tab bar.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.10",
+          "buildVersion": "90",
+          "date": "2026-11-15",
+          "size": 1918805,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.10/WQFiles.ipa",
+          "localizedDescription": "Fixes installed apps missing from Apps, App Data and Extension Data (e.g. on iOS 26.5).",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.9",
+          "buildVersion": "89",
+          "date": "2026-11-15",
+          "size": 1918433,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.9/WQFiles.ipa",
+          "localizedDescription": "App Groups now show their names on iOS 27.2+. Plain Background option, dark and tinted app icon, files you can't open are dimmed, and a clear notice on iOS 18 and older.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.8",
+          "buildVersion": "88",
+          "date": "2026-11-14",
+          "size": 817121,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.8/WQFiles.ipa",
+          "localizedDescription": "Reset Access Cache is now in Settings → Troubleshooting (both designs). The Log explains why access is blocked and logs a repeated failure only once.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.7",
+          "buildVersion": "87",
+          "date": "2026-11-14",
+          "size": 814659,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.7/WQFiles.ipa",
+          "localizedDescription": "New design: Home with container cards, tabs for Apps, Clean and Backups, Settings behind the gear. The previous design stays available (Settings → New Design). New screens translated into every language.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.6",
+          "buildVersion": "81",
+          "date": "2026-11-13",
+          "size": 780279,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.6/WQFiles.ipa",
+          "localizedDescription": "New: Search Inside Folders, Largest Files, Get Info, Duplicate, Copy to Folder, Favorites, Reopen Last Folder, update notice, Extract and Open for ZIPs, Thai. Safer SQLite save and app restore. Fixed: app backups could come out empty; app names and missing app folders on iOS versions with an unknown app database layout.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.5",
+          "buildVersion": "73",
+          "date": "2026-11-12",
+          "size": 715465,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.5/WQFiles.ipa",
+          "localizedDescription": "New: iOS 27.3 beta, Turkish, flags in the language list, Replace All when importing several files, Rename in Select, restore edited backups. Many safety fixes from a code review (folder delete, SQLite backups, ZIP, hex and plist editors, media).",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.4",
+          "buildVersion": "69",
+          "date": "2026-11-12",
+          "size": 647595,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.4/WQFiles.ipa",
+          "localizedDescription": "New: delete folders with everything in them (backed up, restorable), Polish and Russian, filters in App Data, version in the device strip, Reset Access Cache. Fixed: backups with sockets, Share as ZIP of app folders, app names.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.3",
+          "buildVersion": "59",
+          "date": "2026-11-11",
+          "size": 559984,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.3/WQFiles.ipa",
+          "localizedDescription": "New: startup check (stops with what failed instead of empty lists when access breaks), Recently Deleted under Backups. Cache Cleaner progress bar.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.2",
+          "buildVersion": "52",
+          "date": "2026-11-11",
+          "size": 535984,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.2/WQFiles.ipa",
+          "localizedDescription": "New: edit SQLite databases (Edit, then Save writes back with a backup and integrity check). Korean translation. Fixed: Arabic corrections, empty app lists after an iOS update.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9.1",
+          "buildVersion": "50",
+          "date": "2026-11-11",
+          "size": 493734,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9.1/WQFiles.ipa",
+          "localizedDescription": "Now in Simplified Chinese, Arabic, German, Italian and Spanish, with a Language setting. New: Import as Backup, Keep Data Before Restore, media streams instead of copying, offloaded apps and App Bundles (iOS 27). Apps and the Cache Cleaner reopen instantly.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.9",
+          "buildVersion": "38",
+          "date": "2026-11-11",
+          "size": 359440,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.9/WQFiles.ipa",
+          "localizedDescription": "Select, move across apps, compress and extract ZIPs; import several files or whole folders. New: syntax highlighting, media player, Apps filter, bundle IDs and Copy Bundle ID, restore from App Backups, Allow Deleting and Show Item Counts settings. Fixed: iOS 26.5 app list, deleting locked files. Signing: use AltStore, SideStore or Impactor (Sideloadly drops the App Group).",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.8",
+          "buildVersion": "34",
+          "date": "2026-11-10",
+          "size": 320067,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.8/WQFiles.ipa",
+          "localizedDescription": "Apps show up in seconds on every iOS version (no more long first scan); full scans only when needed and after you agree. New: sorting, A–Z sidebar, read-only SQLite viewer, swipe to delete, signing check at launch. Preliminary iOS 26 support.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.7",
+          "buildVersion": "26",
+          "date": "2026-11-10",
+          "size": 295895,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.7/WQFiles.ipa",
+          "localizedDescription": "iOS 27.2: app names are back. iOS 26 (26.0 – 26.7.2) is supported. Faster scans that are remembered, swipe to delete in the file browser, and a more detailed Log.",
+          "minOSVersion": "26.0"
+        },
+        {
+          "version": "0.6",
+          "buildVersion": "6",
+          "date": "2026-11-09",
+          "size": 274646,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.6/WQFiles.ipa",
+          "localizedDescription": "Cooler, faster scans (one shared pass, fewer cores); manage and delete backups, stop a cache clean, cancel ZIP exports; checked backups and restores; signing help in the README. Requires iOS 27.",
+          "minOSVersion": "27.0"
+        },
+        {
+          "version": "0.5",
+          "buildVersion": "5",
+          "date": "2026-11-09",
+          "size": 220846,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.5/WQFiles.ipa",
+          "localizedDescription": "AltStore/SideStore source; safer saves and restores (rollback, interrupted-restore recovery, no overwriting changed files); Log shows version, device and iOS.",
+          "minOSVersion": "27.0"
+        },
+        {
+          "version": "0.4",
+          "buildVersion": "4",
+          "date": "2026-11-09",
+          "size": 208625,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.4/WQFiles.ipa",
+          "localizedDescription": "Plist editor, hex viewer/editor, Open As, search bar, Home button, readable paths.",
+          "minOSVersion": "27.0"
+        },
+        {
+          "version": "0.3",
+          "buildVersion": "3",
+          "date": "2026-11-09",
+          "size": 178674,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.3/WQFiles.ipa",
+          "localizedDescription": "Safer backups and restores; large files are streamed.",
+          "minOSVersion": "27.0"
+        },
+        {
+          "version": "0.2",
+          "buildVersion": "2",
+          "date": "2026-11-09",
+          "size": 173725,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.2/WQFiles.ipa",
+          "localizedDescription": "Fixed: apps you installed were missing.",
+          "minOSVersion": "27.0"
+        },
+        {
+          "version": "0.1",
+          "buildVersion": "1",
+          "date": "2026-11-09",
+          "size": 173183,
+          "downloadURL": "https://github.com/kolbicz/WQFiles/releases/download/v0.1/WQFiles.ipa",
+          "localizedDescription": "First release.",
+          "minOSVersion": "27.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [
+          "com.apple.security.application-groups"
+        ],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": []
+}
