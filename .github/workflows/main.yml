@@ -1,0 +1,90 @@
+name: Build WQ Files IPA
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+
+      - name: Build IPA (skip host tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > "$GITHUB_WORKSPACE/build.log"
+          exec > >(tee -a "$GITHUB_WORKSPACE/build.log") 2>&1
+
+          echo "Starting IPA build in: $PWD"
+          ls -l build.sh
+          chmod +x build.sh
+          bash -n build.sh
+          echo "Running build.sh with host regression tests skipped"
+          bash ./build.sh
+          echo "IPA build step completed"
+        env:
+          WQ_SKIP_PREFLIGHT: "1"
+          WQFILES_FINAL_IPA: ${{ github.workspace }}/WQFiles.ipa
+
+      - name: Verify IPA output
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la "${{ github.workspace }}"
+          test -f "${{ github.workspace }}/WQFiles.ipa"
+          ls -lh "${{ github.workspace }}/WQFiles.ipa"
+
+      - name: Diagnostic output on build failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo "Build or verification failed. Dumping diagnostics:"
+          pwd
+          ls -la
+          ls -la "${{ github.workspace }}"
+          if test -f "$GITHUB_WORKSPACE/build.log"; then
+            echo "--- First build errors ---"
+            grep -nEi "(^|[^a-z])(error|failed|failure|unable|missing|cannot|not found)([^a-z]|$)" "$GITHUB_WORKSPACE/build.log" | head -n 80
+            echo "--- First 300 lines of build.log ---"
+            head -n 300 "$GITHUB_WORKSPACE/build.log"
+            echo "--- Last 300 lines of build.log ---"
+            tail -n 300 "$GITHUB_WORKSPACE/build.log"
+          else
+            echo "build.log was not created"
+          fi
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            ${{ github.workspace }}/build.log
+            ${{ github.workspace }}/WQFiles.ipa
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WQFiles-ipa
+          path: ${{ github.workspace }}/WQFiles.ipa
+          if-no-files-found: error
+          retention-days: 14
