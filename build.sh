@@ -7,6 +7,7 @@ set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
+mkdir -p "$ROOT/preloaded" "$ROOT/resource/drag" "$ROOT/resource/neck" "$ROOT/resource/body" "$ROOT/resource/clean"
 MINIMUM_IOS_VERSION=26.0
 FINAL_IPA=${WQFILES_FINAL_IPA:-WQFiles.ipa}
 
@@ -107,11 +108,16 @@ xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" -module-name WQF
     -Xfrontend -const-gather-protocols-file -Xfrontend "$OUT/appintents-protocols.json" \
     -c WQShortcuts.swift -o "$SWIFT_OBJECT"
 [[ -f "$SWIFT_OBJECT" && -f "$OUT/WQShortcutsIntents.swiftconstvalues" ]] || fail "swiftc wrote no Shortcuts object or constant values"
+WQ_3105_OBJECT="$OUT/WQ3105Reader.o"
+xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" -module-name WQFiles -parse-as-library -O \
+    -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/ModuleCache" \
+    -c WQ3105Reader.swift -o "$WQ_3105_OBJECT"
+[[ -f "$WQ_3105_OBJECT" ]] || fail "swiftc wrote no .3105 reader object"
 xcrun --sdk iphoneos clang -fobjc-arc -fmodules -fmodules-cache-path="$OUT/ModuleCache" -arch arm64 \
     -miphoneos-version-min="$MINIMUM_IOS_VERSION" \
     -isysroot "$SDK" -Wall -Wextra -Werror -O2 ${WQ_EXTRA_CFLAGS:-} \
-    -framework UIKit -framework Foundation -framework Security -framework UniformTypeIdentifiers -framework JavaScriptCore \
-    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" \
+    -framework UIKit -framework Foundation -framework Security -framework CryptoKit -framework UniformTypeIdentifiers -framework JavaScriptCore \
+    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" "$WQ_3105_OBJECT" \
     -L "$SDK/usr/lib/swift" -Xlinker -rpath -Xlinker /usr/lib/swift -lsqlite3 -lz -o "$APP/WQFiles"
 cp Info.plist "$APP/Info.plist"
 # What the Shortcuts app reads to list the actions: without this folder in the
@@ -162,6 +168,9 @@ done
 for lproj in "$ROOT"/*.lproj; do
     [[ -d "$lproj" ]] && cp -R "$lproj" "$APP/"
 done
+# User-provided patch packages and resource folders are bundled read-only.
+cp -R "$ROOT/preloaded" "$APP/"
+cp -R "$ROOT/resource" "$APP/"
 # The example themes ship in the app (Settings → Theme shows them built in).
 if compgen -G "$ROOT/themes/*.wqtheme" >/dev/null; then
     mkdir -p "$APP/Themes"

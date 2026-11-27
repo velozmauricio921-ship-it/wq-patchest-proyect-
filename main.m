@@ -39,6 +39,7 @@
 #import "WQSyntax.h"
 #import "WQMediaStream.h"
 #import "WQInspector.h"
+#import "WQ3105Reader.h"
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
@@ -850,6 +851,11 @@ static void wq_open_file(UINavigationController *nav, NSString *path, BOOL readO
         if (host) wq_alert(host, link ? @"Symbolic link" : @"Cannot open this item",
                            link ? @"WQ Files does not follow symbolic links for viewing, sharing or editing."
                                 : @"Only regular files can be viewed.");
+        return;
+    }
+    if (mode == WQOpenAuto && [path.pathExtension caseInsensitiveCompare:@"3105"] == NSOrderedSame) {
+        UIViewController *reader = (__bridge_transfer UIViewController *)WQ3105MakePackageViewController(path.fileSystemRepresentation);
+        [nav pushViewController:reader animated:YES];
         return;
     }
     if (mode == WQOpenAuto && wq_is_media_name(path)) mode = WQOpenMedia;
@@ -5517,6 +5523,11 @@ static BOOL wq_startup_checked;
 static BOOL gHealthFailed;
 static void wq_apply_design(void);
 
+static NSString *wq_library_bundle_path(NSString *folder)
+{
+    return [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:folder];
+}
+
 @interface WQPrismHomeViewController : UIViewController
 @end
 
@@ -5792,6 +5803,8 @@ static void wq_apply_design(void);
         @[@"Cache Cleaner", @"sparkles", @"mint", @"Library/Caches"],
         @[@"Go to Path…", @"arrow.right.circle.fill", @"violet", @"Path"],
         @[@"Backups", @"clock.arrow.circlepath", @"amber", @"App Backups"],
+        @[@"Patchest", @"shippingbox", @"sky", @"preloaded"],
+        @[@"Resources", @"folder.fill", @"mint", @"resource"],
     ];
     for (NSUInteger i = 0; i < tools.count; i++) {
         NSArray *t = tools[i];
@@ -6161,6 +6174,8 @@ static void wq_apply_design(void);
         case 1: [self openTab:2]; break;
         case 2: [self goToPath]; break;
         case 3: [self openTab:3]; break;
+        case 4: [self openBundledLibrary:@"preloaded" title:@"Patchest"]; break;
+        case 5: [self openBundledLibrary:@"resource" title:@"Resources"]; break;
         default: break;
     }
 }
@@ -6180,6 +6195,14 @@ static void wq_apply_design(void);
 {
     WQDirViewController *dir = [[WQDirViewController alloc] initWithPath:path title:title];
     [self.navigationController pushViewController:dir animated:YES];
+}
+
+- (void)openBundledLibrary:(NSString *)folder title:(NSString *)title
+{
+    WQDirViewController *directory = [[WQDirViewController alloc] initWithPath:wq_library_bundle_path(folder)
+                                                                          title:WQLocalizedNullable(title)];
+    directory.readOnly = YES;
+    [self.navigationController pushViewController:directory animated:YES];
 }
 
 - (void)openSystemData
@@ -7062,7 +7085,7 @@ static NSString *const kWQTroubleshootingFooter =
     // System Groups is the extra last row, on iOS 27 only.
     if (section == 3) return 1;
     if (section == 2) return 11;   // row 7: Sharing Password, row 8: Show Folder Sizes, row 9: App Store Icons, row 10: Shortcuts
-    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 10;
+    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 12;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -7180,7 +7203,8 @@ static NSString *const kWQTroubleshootingFooter =
         NSArray *tools = @[@[@"Apps", @"square.grid.3x3"], @[@"Cache Cleaner", @"trash"], @[@"Go to Path…", @"arrow.right.circle"],
                            @[@"App Backups", @"clock.arrow.circlepath"], @[@"Backups", @"clock.arrow.circlepath"],
                            @[@"Recently Deleted", @"trash.circle"], @[@"Log", @"doc.plaintext"], @[@"Favorites", @"star"],
-                           @[@"Recent", @"clock"], @[@"Inspectors", @"curlybraces"]];
+                           @[@"Recent", @"clock"], @[@"Inspectors", @"curlybraces"],
+                           @[@"Patchest", @"shippingbox"], @[@"Resources", @"folder"]];
         c.text = WQLocalizedNullable(tools[(NSUInteger)indexPath.row][0]);
         c.image = [UIImage systemImageNamed:tools[(NSUInteger)indexPath.row][1]];
     }
@@ -7235,6 +7259,13 @@ static NSString *const kWQTroubleshootingFooter =
     } else if (indexPath.row == 9) {
         wq_open_inspectors_folder(self.navigationController);
         return;
+    } else if (indexPath.row == 10 || indexPath.row == 11) {
+        NSString *folder = indexPath.row == 10 ? @"preloaded" : @"resource";
+        NSString *title = indexPath.row == 10 ? @"Patchest" : @"Resources";
+        WQDirViewController *directory = [[WQDirViewController alloc] initWithPath:wq_library_bundle_path(folder)
+                                                                              title:WQLocalizedNullable(title)];
+        directory.readOnly = YES;
+        next = directory;
     } else {
         next = [WQLogViewController new];
     }
