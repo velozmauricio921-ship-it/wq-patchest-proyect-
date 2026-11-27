@@ -2564,20 +2564,67 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
     NSDictionary *identity = wq_identity_at(gWQMoveIdentities, 0);
     NSString *folder = _path;
     wq_set_move_paths(nil, nil, NO);
-    [self runBusy:WQLocalized(@"Copy") failure:WQLocalized(@"Copying failed.")
-             work:^BOOL(NSString **error, NSString **__unused note) {
+    NSString *destination = [folder stringByAppendingPathComponent:source.lastPathComponent];
+    dispatch_async(wq_io(), ^{
         struct stat st;
         if (!identity || !wq_stat(source, &st) || ![identity isEqualToDictionary:wq_identity_for_stat(&st)]) {
-            *error = WQLocalized(@"The item was moved, replaced or changed after it was selected. It was left as it is.");
-            return NO;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                wq_alert(self, @"Copying failed", @"The item was moved, replaced or changed after it was selected. It was left as it is.");
+            });
+            return;
         }
-        // A same-named item there is kept; the copy gets "Name 2".
+        struct stat destinationStat;
+        BOOL destinationExists = wq_stat(destination, &destinationStat);
+        if (S_ISREG(st.st_mode) && destinationExists && S_ISREG(destinationStat.st_mode)) {
+            NSDictionary *destinationVersion = wq_file_version(destination);
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!destinationVersion) {
+                    wq_alert(self, @"Copying failed", @"The existing file changed or could not be verified. Try again.");
+                    return;
+                }
+                UIAlertController *alert = wq_alert_controller(
+                    @"Replace existing file?",
+                    WQLocalizedFormat(@"%@ already exists. It is backed up before being replaced.", destination),
+                    UIAlertControllerStyleAlert
+                );
+                [alert addAction:wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)];
+                [alert addAction:wq_alert_action(@"Replace", UIAlertActionStyleDestructive, ^(UIAlertAction *__unused action) {
+                    [self runBusy:WQLocalized(@"Copy") failure:WQLocalized(@"Copying failed.")
+                             work:^BOOL(NSString **error, NSString **__unused note) {
+                        struct stat currentSource;
+                        if (!wq_stat(source, &currentSource) ||
+                            ![identity isEqualToDictionary:wq_identity_for_stat(&currentSource)]) {
+                            *error = WQLocalized(@"The item was moved, replaced or changed after it was selected. It was left as it is.");
+                            return NO;
+                        }
+                        return wq_write_from_file_if_unchanged(destination, source, destinationVersion, error);
+                    }];
+                })];
+                [self presentViewController:alert animated:YES completion:nil];
+            });
+            return;
+        }
+
         NSString *name = wq_free_name_in(folder, source.lastPathComponent, [NSMutableSet new]);
-        if (!name) { *error = WQLocalized(@"No free name in this folder"); return NO; }
-        NSString *destination = [folder stringByAppendingPathComponent:name];
-        return S_ISDIR(st.st_mode) ? wq_copy_tree_new(source, destination, nil, error)
-                                  : wq_create_file_from(destination, source, error);
-    }];
+        if (!name) {
+            dispatch_async(dispatch_get_main_queue(), ^{ wq_alert(self, @"Copying failed", @"No free name in this folder."); });
+            return;
+        }
+        NSString *copyDestination = [folder stringByAppendingPathComponent:name];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self runBusy:WQLocalized(@"Copy") failure:WQLocalized(@"Copying failed.")
+                     work:^BOOL(NSString **error, NSString **__unused note) {
+                struct stat currentSource;
+                if (!wq_stat(source, &currentSource) ||
+                    ![identity isEqualToDictionary:wq_identity_for_stat(&currentSource)]) {
+                    *error = WQLocalized(@"The item was moved, replaced or changed after it was selected. It was left as it is.");
+                    return NO;
+                }
+                return S_ISDIR(currentSource.st_mode) ? wq_copy_tree_new(source, copyDestination, nil, error)
+                                                      : wq_create_file_from(copyDestination, source, error);
+            }];
+        });
+    });
 }
 
 - (void)cancelMove
