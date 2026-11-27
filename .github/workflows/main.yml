@@ -39,6 +39,9 @@ jobs:
         env:
           WQ_SKIP_PREFLIGHT: "1"
           WQFILES_FINAL_IPA: ${{ github.workspace }}/WQFiles.ipa
+          KEYAUTH_SECRET: ${{ secrets.KEYAUTH_SECRET }}
+          KEYAUTH_OWNER_ID: ${{ secrets.KEYAUTH_OWNER_ID || vars.KEYAUTH_OWNER_ID }}
+          KEYAUTH_APP_NAME: ${{ secrets.KEYAUTH_APP_NAME || vars.KEYAUTH_APP_NAME }}
 
       - name: Verify IPA output
         if: success()
