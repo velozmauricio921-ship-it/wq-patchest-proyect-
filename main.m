@@ -2553,7 +2553,8 @@ static void wq_open_custom_inspector(UIViewController *host, NSString *path, UIV
 {
     if (!item.identity || item.isLink || !(item.isRegular || item.isDir)) return;
     wq_set_move_paths(@[item.path], @[item.identity], YES);
-    wq_alert(self, @"Copy to Folder…", @"Open the destination folder, then tap Copy Here.");
+    wq_alert(self, item.isDir ? WQLocalizedNullable(@"Copy to Folder…") : WQLocalizedNullable(@"Copy"),
+             @"Open the destination folder, then tap Copy Here.");
 }
 
 - (void)copyHere
@@ -3532,7 +3533,8 @@ static NSString *wq_sqlite_set_key(NSString *path)
             if (latest) [weakSelf.navigationController pushViewController:[[WQInfoViewController alloc] initWithPath:latest.path] animated:YES];
         }]];
         if (!current.isLink && (current.isRegular || current.isDir) && current.identity) {
-            [actions addObject:[UIAction actionWithTitle:WQLocalized(@"Copy to Folder…") image:[UIImage systemImageNamed:@"doc.on.doc"]
+            NSString *copyTitle = current.isDir ? WQLocalizedNullable(@"Copy to Folder…") : WQLocalizedNullable(@"Copy");
+            [actions addObject:[UIAction actionWithTitle:copyTitle image:[UIImage systemImageNamed:@"doc.on.doc"]
                                               identifier:nil handler:^(UIAction *__unused a) {
                 WQItem *latest = currentItem();
                 if (latest) [weakSelf startCopy:latest];
