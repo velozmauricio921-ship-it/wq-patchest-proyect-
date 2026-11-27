@@ -40,6 +40,7 @@
 #import "WQMediaStream.h"
 #import "WQInspector.h"
 #import "WQ3105Reader.h"
+#import "WQAuthGate.h"
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
@@ -7601,6 +7602,8 @@ static UIViewController *wq_top_view_controller(void);
 
 @interface WQSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property (nonatomic, strong) UIWindow *window;
+@property (nonatomic, strong) WQAuthGateViewController *authGate;
+- (void)handleExternalURL:(NSURL *)url;
 @end
 
 @implementation WQSceneDelegate
@@ -7614,12 +7617,32 @@ static UIViewController *wq_top_view_controller(void);
 #else
     UIWindow *window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
 #endif
-    window.rootViewController = wq_make_root_view_controller();
     [window makeKeyAndVisible];
     self.window = window;
     [self applyThemeTint];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(applyThemeTint)
                                                name:WQThemeChangedNotification object:nil];
+    if (wq_ios_supported()) {
+        WQAuthGateViewController *gate = [WQAuthGateViewController new];
+        self.authGate = gate;
+        __weak typeof(self) weakSelf = self;
+        __weak WQAuthGateViewController *weakGate = gate;
+        gate.onAuthenticated = ^(NSURL *pendingURL) {
+            WQSceneDelegate *strongSelf = weakSelf;
+            if (!strongSelf.window) return;
+            strongSelf.window.rootViewController = wq_make_root_view_controller();
+            [strongSelf applyThemeTint];
+            if (pendingURL) dispatch_async(dispatch_get_main_queue(), ^{ [strongSelf handleExternalURL:pendingURL]; });
+        };
+        gate.onAuthenticationExpired = ^{
+            WQSceneDelegate *strongSelf = weakSelf;
+            WQAuthGateViewController *currentGate = weakGate;
+            if (strongSelf.window && currentGate) strongSelf.window.rootViewController = currentGate;
+        };
+        window.rootViewController = gate;
+    } else {
+        window.rootViewController = wq_make_root_view_controller();
+    }
     if (options.URLContexts.count) [self scene:scene openURLContexts:options.URLContexts];
 }
 
@@ -7636,13 +7659,23 @@ static UIViewController *wq_top_view_controller(void);
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)contexts
 {
     for (UIOpenURLContext *context in contexts) {
-        NSURL *url = context.URL;
-        if (!url.isFileURL) continue;
-        NSString *ext = url.pathExtension.lowercaseString;
-        if ([ext isEqualToString:@"wqtheme"])
-            dispatch_async(dispatch_get_main_queue(), ^{ wq_import_theme_url(wq_top_view_controller(), url); });
-        else if ([ext isEqualToString:@"zip"])   // a custom inspector (#45)
-            dispatch_async(dispatch_get_main_queue(), ^{ wq_install_inspector_url(wq_top_view_controller(), url); });
+        [self handleExternalURL:context.URL];
+    }
+}
+
+- (void)handleExternalURL:(NSURL *)url
+{
+    if (!url.isFileURL) return;
+    UIViewController *host = wq_top_view_controller();
+    if ([host isKindOfClass:WQAuthGateViewController.class]) {
+        ((WQAuthGateViewController *)host).pendingURL = url;
+        return;
+    }
+    NSString *extension = url.pathExtension.lowercaseString;
+    if ([extension isEqualToString:@"wqtheme"]) {
+        wq_import_theme_url(host, url);
+    } else if ([extension isEqualToString:@"zip"]) {
+        wq_install_inspector_url(host, url);
     }
 }
 

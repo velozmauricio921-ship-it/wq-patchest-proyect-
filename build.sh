@@ -117,9 +117,15 @@ xcrun --sdk iphoneos clang -fobjc-arc -fmodules -fmodules-cache-path="$OUT/Modul
     -miphoneos-version-min="$MINIMUM_IOS_VERSION" \
     -isysroot "$SDK" -Wall -Wextra -Werror -O2 ${WQ_EXTRA_CFLAGS:-} \
     -framework UIKit -framework Foundation -framework Security -framework CryptoKit -framework UniformTypeIdentifiers -framework JavaScriptCore \
-    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" "$WQ_3105_OBJECT" \
+    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQAuthGate.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" "$WQ_3105_OBJECT" \
     -L "$SDK/usr/lib/swift" -Xlinker -rpath -Xlinker /usr/lib/swift -lsqlite3 -lz -o "$APP/WQFiles"
 cp Info.plist "$APP/Info.plist"
+# KeyAuth configuration is injected into the built IPA only; never write it to source Info.plist.
+if [[ -n "${KEYAUTH_SECRET:-}" && -n "${KEYAUTH_OWNER_ID:-}" && -n "${KEYAUTH_APP_NAME:-}" ]]; then
+    /usr/bin/plutil -insert WQKeyAuthAppName -string "$KEYAUTH_APP_NAME" "$APP/Info.plist"
+    /usr/bin/plutil -insert WQKeyAuthOwnerID -string "$KEYAUTH_OWNER_ID" "$APP/Info.plist"
+    /usr/bin/plutil -insert WQKeyAuthSecret -string "$KEYAUTH_SECRET" "$APP/Info.plist"
+fi
 # What the Shortcuts app reads to list the actions: without this folder in the
 # app, the Swift code is there but no action shows up.
 SWIFT_TOOLCHAIN=$(dirname "$(dirname "$(dirname "$(xcrun --sdk iphoneos --find swiftc)")")")
