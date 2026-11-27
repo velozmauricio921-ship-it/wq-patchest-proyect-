@@ -41,6 +41,7 @@
 #import "WQInspector.h"
 #import "WQ3105Reader.h"
 #import "WQAuthGate.h"
+#import "WQPatchProjects-Swift.h"
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <objc/runtime.h>
@@ -6801,6 +6802,94 @@ static NSString *const kWQTroubleshootingFooter =
 
 #pragma mark - WQ Prism tabs
 
+@interface WQExternalContainersViewController : UITableViewController
+@end
+
+@implementation WQExternalContainersViewController {
+    NSArray<NSDictionary<NSString *, NSString *> *> *_containers;
+    BOOL _loading;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.title = WQLocalizedNullable(@"External");
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.estimatedRowHeight = 68;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc]
+        initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(reloadContainers)];
+    [self reloadContainers];
+}
+
+- (void)reloadContainers
+{
+    if (_loading) return;
+    _loading = YES;
+    self.navigationItem.rightBarButtonItem.enabled = NO;
+    [self.tableView reloadData];
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<NSString *> *paths = wq_ls_container_paths(nil) ?: @[];
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *containers = [NSMutableArray new];
+        for (NSString *path in paths) {
+            NSString *bundleID = wq_bundle_id_for_container(path) ?: @"";
+            NSString *name = bundleID.length ? wq_display_name(bundleID) : nil;
+            [containers addObject:@{
+                @"name": name.length ? name : (bundleID.length ? bundleID : path.lastPathComponent),
+                @"bundleID": bundleID,
+                @"path": path,
+            }];
+        }
+        [containers sortUsingComparator:^NSComparisonResult(NSDictionary<NSString *, NSString *> *left,
+                                                            NSDictionary<NSString *, NSString *> *right) {
+            return [left[@"name"] localizedCaseInsensitiveCompare:right[@"name"]];
+        }];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self->_containers = containers;
+            self->_loading = NO;
+            self.navigationItem.rightBarButtonItem.enabled = YES;
+            [self.tableView reloadData];
+        });
+    });
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return _loading || _containers.count == 0 ? 1 : (NSInteger)_containers.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"external-container"]
+        ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:@"external-container"];
+    cell.accessoryView = nil;
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+
+    UIListContentConfiguration *content = [UIListContentConfiguration subtitleCellConfiguration];
+    if (_loading) {
+        content.text = WQLocalizedNullable(@"Loading…");
+        UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+        [spinner startAnimating];
+        cell.accessoryView = spinner;
+    } else if (_containers.count == 0) {
+        content.text = WQLocalizedNullable(@"No external container records found");
+        content.image = [UIImage systemImageNamed:@"externaldrive.badge.questionmark"];
+    } else {
+        NSDictionary<NSString *, NSString *> *container = _containers[(NSUInteger)indexPath.row];
+        content.text = container[@"name"];
+        NSString *bundleID = container[@"bundleID"];
+        NSString *path = container[@"path"];
+        content.secondaryText = bundleID.length
+            ? [NSString stringWithFormat:@"%@\n%@", bundleID, path]
+            : path;
+        content.secondaryTextProperties.numberOfLines = 0;
+        content.image = [UIImage systemImageNamed:@"shippingbox"];
+    }
+    cell.contentConfiguration = content;
+    return cell;
+}
+
+@end
+
 @interface WQPrismTabController : UITabBarController
 @end
 
@@ -6813,11 +6902,13 @@ static NSString *const kWQTroubleshootingFooter =
     WQAppsViewController *apps = [WQAppsViewController new];
     WQCacheCleanerViewController *clean = [WQCacheCleanerViewController new];
     WQPrismVaultViewController *vault = [WQPrismVaultViewController new];
+    UIViewController *external = [WQExternalPatchViewFactory makeViewController];
 
     WQNavigationController *homeNav = [[WQNavigationController alloc] initWithRootViewController:home];
     WQNavigationController *appsNav = [[WQNavigationController alloc] initWithRootViewController:apps];
     WQNavigationController *cleanNav = [[WQNavigationController alloc] initWithRootViewController:clean];
     WQNavigationController *vaultNav = [[WQNavigationController alloc] initWithRootViewController:vault];
+    WQNavigationController *externalNav = [[WQNavigationController alloc] initWithRootViewController:external];
 
     homeNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Home")
         image:[UIImage systemImageNamed:@"house.fill"] tag:0];
@@ -6827,8 +6918,10 @@ static NSString *const kWQTroubleshootingFooter =
         image:[UIImage systemImageNamed:@"sparkles"] tag:2];
     vaultNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"Backups")
         image:[UIImage systemImageNamed:@"clock.arrow.circlepath"] tag:3];
+    externalNav.tabBarItem = [[UITabBarItem alloc] initWithTitle:WQLocalizedNullable(@"External")
+        image:[UIImage systemImageNamed:@"shippingbox"] tag:4];
 
-    self.viewControllers = @[homeNav, appsNav, cleanNav, vaultNav];
+    self.viewControllers = @[homeNav, appsNav, cleanNav, vaultNav, externalNav];
     self.selectedIndex = 0;
     self.tabBar.tintColor = wq_theme_accent();
     __weak typeof(self) weakSelf = self;
@@ -7135,7 +7228,7 @@ static NSString *const kWQTroubleshootingFooter =
     // System Groups is the extra last row, on iOS 27 only.
     if (section == 3) return 1;
     if (section == 2) return 11;   // row 7: Sharing Password, row 8: Show Folder Sizes, row 9: App Store Icons, row 10: Shortcuts
-    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : 12;
+    return section == 0 ? (NSInteger)_locations.count + (wq_system_areas_reachable() ? 1 : 0) : section == 1 ? 13 : 0;
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section
@@ -7254,7 +7347,8 @@ static NSString *const kWQTroubleshootingFooter =
                            @[@"App Backups", @"clock.arrow.circlepath"], @[@"Backups", @"clock.arrow.circlepath"],
                            @[@"Recently Deleted", @"trash.circle"], @[@"Log", @"doc.plaintext"], @[@"Favorites", @"star"],
                            @[@"Recent", @"clock"], @[@"Inspectors", @"curlybraces"],
-                           @[@"Patchest", @"shippingbox"], @[@"Resources", @"folder"]];
+                           @[@"Patchest", @"shippingbox"], @[@"Resources", @"folder"],
+                           @[@"External", @"shippingbox"]];
         c.text = WQLocalizedNullable(tools[(NSUInteger)indexPath.row][0]);
         c.image = [UIImage systemImageNamed:tools[(NSUInteger)indexPath.row][1]];
     }
@@ -7316,6 +7410,8 @@ static NSString *const kWQTroubleshootingFooter =
                                                                               title:WQLocalizedNullable(title)];
         directory.readOnly = YES;
         next = directory;
+    } else if (indexPath.row == 12) {
+        next = [WQExternalPatchViewFactory makeViewController];
     } else {
         next = [WQLogViewController new];
     }

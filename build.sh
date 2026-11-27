@@ -113,11 +113,22 @@ xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" -module-name WQF
     -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/ModuleCache" \
     -c WQ3105Reader.swift -o "$WQ_3105_OBJECT"
 [[ -f "$WQ_3105_OBJECT" ]] || fail "swiftc wrote no .3105 reader object"
+PATCH_SWIFT_OBJECT="$OUT/WQPatchProjects.o"
+xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" \
+    -module-name WQPatchProjects -parse-as-library -whole-module-optimization -O \
+    -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/ModuleCache" \
+    -emit-module -emit-module-path "$OUT/WQPatchProjects.swiftmodule" \
+    -emit-object -emit-objc-header-path "$OUT/WQPatchProjects-Swift.h" \
+    PatchProjectModels.swift PatchPackageCodec.swift PatchKeyStore.swift \
+    PatchWorkspaceService.swift PatchProjectLibrary.swift PatchProjectStore.swift \
+    PatchDraftCoordinator.swift PatchProjectEditorView.swift PatchProjectsView.swift \
+    -o "$PATCH_SWIFT_OBJECT"
+[[ -f "$PATCH_SWIFT_OBJECT" ]] || fail "swiftc wrote no PatchProjects object"
 xcrun --sdk iphoneos clang -fobjc-arc -fmodules -fmodules-cache-path="$OUT/ModuleCache" -arch arm64 \
     -miphoneos-version-min="$MINIMUM_IOS_VERSION" \
-    -isysroot "$SDK" -Wall -Wextra -Werror -O2 ${WQ_EXTRA_CFLAGS:-} \
-    -framework UIKit -framework Foundation -framework Security -framework CryptoKit -framework UniformTypeIdentifiers -framework JavaScriptCore \
-    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQAuthGate.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" "$WQ_3105_OBJECT" \
+    -isysroot "$SDK" -I "$OUT" -Wall -Wextra -Werror -O2 ${WQ_EXTRA_CFLAGS:-} \
+    -framework UIKit -framework SwiftUI -framework Combine -framework Foundation -framework Security -framework CryptoKit -framework UniformTypeIdentifiers -framework JavaScriptCore \
+    WQCore.m WQAccess.m WQScanTask.m WQLocalization.m WQLaunchServices.m WQUI.m WQSharing.m WQApps.m WQCache.m WQPlistEditor.m WQAuthGate.m WQHexViewer.m WQSQLiteViewer.m WQSQLiteSave.m WQHealth.m WQTrash.m WQArchive.m WQSyntax.m WQMediaStream.m WQWebServer.m WQTheme.m WQInspector.m WQShortcuts.m main.m "$SWIFT_OBJECT" "$WQ_3105_OBJECT" "$PATCH_SWIFT_OBJECT" \
     -L "$SDK/usr/lib/swift" -Xlinker -rpath -Xlinker /usr/lib/swift -lsqlite3 -lz -o "$APP/WQFiles"
 cp Info.plist "$APP/Info.plist"
 # KeyAuth configuration is injected into the built IPA only; never write it to source Info.plist.

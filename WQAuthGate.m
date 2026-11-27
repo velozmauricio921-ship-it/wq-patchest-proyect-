@@ -262,6 +262,12 @@ static BOOL wq_auth_session_is_valid(NSString *license)
     return !expiry || expiry.timeIntervalSinceNow > 0;
 }
 
+BOOL wq_auth_has_valid_session(void)
+{
+    NSString *license = wq_auth_saved_license();
+    return license.length > 0 && wq_auth_session_is_valid(license);
+}
+
 static BOOL wq_auth_should_force_logout(void)
 {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
