@@ -100,19 +100,21 @@ enum DevicePatchService {
                 URL(fileURLWithPath: path, isDirectory: true)
             )
             guard root.deletingLastPathComponent().path == applicationDataRoot,
-                  UUID(uuidString: root.lastPathComponent) != nil,
-                  wq_grant(path) else {
+                                    UUID(uuidString: root.lastPathComponent) != nil else {
                 continue
             }
 
             var fileStatus = stat()
             guard wq_stat(path, &fileStatus),
-                  fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
-                  wq_container_label(path) == bundleID else {
+                                    fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
                 continue
             }
-                        if let launchServicesBundleID = wq_bundle_id_for_container(path),
-                             launchServicesBundleID != bundleID {
+
+                        let launchServicesBundleID = wq_bundle_id_for_container(path)
+                        let containerLabel = wq_container_label(path)
+                        guard (launchServicesBundleID == bundleID || containerLabel == bundleID),
+                                    launchServicesBundleID == nil || launchServicesBundleID == bundleID,
+                                    containerLabel == nil || containerLabel == bundleID else {
                                 continue
                         }
             return root
