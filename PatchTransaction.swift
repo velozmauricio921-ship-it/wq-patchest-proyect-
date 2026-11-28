@@ -251,6 +251,7 @@ enum PatchTransaction {
                     roots: roots,
                     requirePatchedDigest: false,
                     createdDirectories: createdDirectories,
+                    requestAccess: requestAccess,
                     fileManager: fileManager
                 )
                 journal.status = .rolledBack
@@ -297,6 +298,7 @@ enum PatchTransaction {
                 roots: roots,
                 requirePatchedDigest: journal.status == .applied,
                 createdDirectories: journal.createdDirectories ?? [],
+                requestAccess: requestAccess,
                 fileManager: fileManager
             )
             journal.status = .restored
@@ -355,6 +357,7 @@ enum PatchTransaction {
         roots: [String: URL],
         requirePatchedDigest: Bool,
         createdDirectories: [DirectoryRecord],
+        requestAccess: ((URL) -> Void)?,
         fileManager: FileManager
     ) throws {
         var resolvedTargets: [(Record, URL, URL)] = []
