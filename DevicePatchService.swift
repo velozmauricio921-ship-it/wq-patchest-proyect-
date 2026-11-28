@@ -59,7 +59,8 @@ enum DevicePatchService {
         for bundleID in bundleIDs {
             var root = resolveAppContainer(
                 bundleID: bundleID,
-                paths: launchServicesPaths
+                paths: launchServicesPaths,
+                source: "LaunchServices"
             )
             if root == nil {
                 if fallbackPaths == nil {
@@ -67,10 +68,15 @@ enum DevicePatchService {
                 }
                 root = resolveAppContainer(
                     bundleID: bundleID,
-                    paths: fallbackPaths ?? []
+                    paths: fallbackPaths ?? [],
+                    source: "App Data listing"
                 )
             }
             guard let root else {
+                wq_log_message(
+                    "patch: no container for \(bundleID); LaunchServices paths=\(launchServicesPaths.count), " +
+                    "App Data paths=\(fallbackPaths?.count ?? 0)"
+                )
                 throw PatchPackageError.targetAppUnavailable(bundleID)
             }
             roots[bundleID] = root
@@ -91,12 +97,19 @@ enum DevicePatchService {
         return wq_enumerate(applicationDataRoot, 0, nil, nil) ?? []
     }
 
-    private static func resolveAppContainer(bundleID: String, paths: [String]) -> URL? {
+    private static func resolveAppContainer(bundleID: String, paths: [String], source: String) -> URL? {
         guard (try? PatchPathValidator.canonicalBundleIdentifier(bundleID)) == bundleID else {
+            wq_log_message("patch: invalid bundle identifier during \(source) resolution")
             return nil
         }
 
         let applicationDataRoot = "/private/var/mobile/Containers/Data/Application"
+        var matchingPaths = 0
+        var statFailures = 0
+        var nonDirectories = 0
+        var labelMismatches = 0
+        var launchServicesMismatches = 0
+        var unidentifiedPaths = 0
         for path in paths {
             let root = PatchPathValidator.canonicalFileURL(
                 URL(fileURLWithPath: path, isDirectory: true)
@@ -105,21 +118,43 @@ enum DevicePatchService {
                                     UUID(uuidString: root.lastPathComponent) != nil else {
                 continue
             }
+            matchingPaths += 1
 
             _ = wq_grant(root.path)
             var fileStatus = stat()
-            guard wq_stat(root.path, &fileStatus),
-                                    fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
+            guard wq_stat(root.path, &fileStatus) else {
+                statFailures += 1
+                continue
+            }
+            guard fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
+                nonDirectories += 1
                 continue
             }
 
             if let containerLabel = wq_container_label(root.path) {
-                guard containerLabel == bundleID else { continue }
+                guard containerLabel == bundleID else {
+                    labelMismatches += 1
+                    continue
+                }
                 return root
             }
-            guard wq_bundle_id_for_container(root.path) == bundleID else { continue }
+            if let launchServicesBundleID = wq_bundle_id_for_container(root.path) {
+                guard launchServicesBundleID == bundleID else {
+                    launchServicesMismatches += 1
+                    continue
+                }
+            } else {
+                unidentifiedPaths += 1
+                continue
+            }
             return root
         }
+        wq_log_message(
+            "patch: \(source) resolution for \(bundleID) found no match; paths=\(paths.count), " +
+            "matching paths=\(matchingPaths), stat failures=\(statFailures), " +
+            "non-directories=\(nonDirectories), label mismatches=\(labelMismatches), " +
+            "LaunchServices mismatches=\(launchServicesMismatches), unidentified=\(unidentifiedPaths)"
+        )
         return nil
     }
 
