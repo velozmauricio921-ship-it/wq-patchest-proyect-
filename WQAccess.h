@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Log shared with the UI.
 void wq_log(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2);
+void wq_log_message(NSString *message);
 NSString *wq_log_text(void);
 
 // Picks the app group the signer actually gave us. Nil when there is none.

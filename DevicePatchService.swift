@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 enum DevicePatchService {
     static func apply(project: PatchProject) async throws -> PatchTransactionReceipt {
@@ -50,15 +51,73 @@ enum DevicePatchService {
         operation: ([String: URL]) throws -> T
     ) throws -> T {
         var roots: [String: URL] = [:]
+        let launchServicesPaths = wq_ls_container_paths(nil) ?? []
+        var fallbackPaths: [String]?
 
         for bundleID in bundleIDs {
-            guard let path = ContainerStore.resolveAppContainerPath(bundleID: bundleID),
-                  ContainerStore.isApplicationContainerPath(path) else {
+            var root = resolveAppContainer(
+                bundleID: bundleID,
+                paths: launchServicesPaths
+            )
+            if root == nil {
+                if fallbackPaths == nil {
+                    fallbackPaths = appDataContainerPaths()
+                }
+                root = resolveAppContainer(
+                    bundleID: bundleID,
+                    paths: fallbackPaths ?? []
+                )
+            }
+            guard let root else {
                 throw PatchPackageError.targetAppUnavailable(bundleID)
             }
-            roots[bundleID] = PatchPathValidator.canonicalFileURL(URL(fileURLWithPath: path, isDirectory: true))
+            roots[bundleID] = root
         }
         return try operation(roots)
+    }
+
+    private static func appDataContainerPaths() -> [String] {
+        let applicationDataRoot = "/private/var/mobile/Containers/Data/Application"
+        let listedNames = wq_list(applicationDataRoot, nil) ?? []
+        if !listedNames.isEmpty {
+            return listedNames.map { name in
+                name.hasPrefix("/")
+                    ? name
+                    : (applicationDataRoot as NSString).appendingPathComponent(name)
+            }
+        }
+        return wq_enumerate(applicationDataRoot, 0, nil, nil) ?? []
+    }
+
+    private static func resolveAppContainer(bundleID: String, paths: [String]) -> URL? {
+        guard (try? PatchPathValidator.canonicalBundleIdentifier(bundleID)) == bundleID else {
+            return nil
+        }
+
+        let applicationDataRoot = "/private/var/mobile/Containers/Data/Application"
+        for path in paths {
+            let root = PatchPathValidator.canonicalFileURL(
+                URL(fileURLWithPath: path, isDirectory: true)
+            )
+            guard root.deletingLastPathComponent().path == applicationDataRoot,
+                  UUID(uuidString: root.lastPathComponent) != nil,
+                  wq_grant(path) else {
+                continue
+            }
+
+            var fileStatus = stat()
+            guard wq_stat(path, &fileStatus),
+                  fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
+                  wq_container_label(path) == bundleID else {
+                continue
+            }
+                        if let launchServicesBundleID = wq_bundle_id_for_container(path),
+                             launchServicesBundleID != bundleID {
+                                continue
+                        }
+            return root
+        }
+        return nil
     }
 
     // Deactivate (restore) all applied patches found in the backups directory.

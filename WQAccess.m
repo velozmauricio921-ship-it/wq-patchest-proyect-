@@ -115,6 +115,11 @@ void wq_log(NSString *format, ...)
     errno = savedErrno;
 }
 
+void wq_log_message(NSString *message)
+{
+    wq_log(@"%@", message ?: @"");
+}
+
 NSString *wq_log_text(void)
 {
     [gLogLock lock];

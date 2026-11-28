@@ -19,6 +19,29 @@ struct PatchPasswordRequest: Identifiable {
     var id: UUID { summary.packageID }
 }
 
+private enum SecureZIPArchive {
+    static func extract(archiveURL: URL, destinationURL: URL) throws {
+        var errorText: NSString?
+        guard wq_zip_extract(
+            archiveURL.path,
+            destinationURL.path,
+            wq_archive_posix_io(),
+            512 * 1024 * 1024,
+            nil,
+            nil,
+            nil,
+            nil,
+            &errorText
+        ) else {
+            throw NSError(
+                domain: "SecureZIPArchive",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: errorText.map { $0 as String } ?? "ZIP extraction failed"]
+            )
+        }
+    }
+}
+
 enum PatchProjectLibrary {
     private static let installNamespaceKey = "PatchProjectLibrary.installNamespace"
 
@@ -156,12 +179,12 @@ enum PatchProjectLibrary {
                     do {
                         _ = try PatchWorkspaceService.ensureWorkspace(for: project)
                     } catch {
-                        log("patch: workspace unavailable for \(project.id.uuidString)")
+                        wq_log_message("patch: workspace unavailable for \(project.id.uuidString)")
                     }
                 }
                 items.append(item)
             } catch {
-                log("patch: skipped invalid local package \(url.lastPathComponent)")
+                wq_log_message("patch: skipped invalid local package \(url.lastPathComponent)")
             }
         }
         return items.sorted {
@@ -286,13 +309,13 @@ enum PatchProjectLibrary {
     }
 
     static func ensurePreloadedPackagesInstalled(fileManager: FileManager = .default) {
-        guard let libraryRoot = try? packageRootURL(fileManager: fileManager) else { return }
+        guard (try? packageRootURL(fileManager: fileManager)) != nil else { return }
 
         let preloadedRoot: URL
         do {
             preloadedRoot = try preloadedRootURL(fileManager: fileManager)
         } catch {
-            log("preload: failed to prepare preloaded cache — \(error.localizedDescription)")
+            wq_log_message("preload: failed to prepare preloaded cache — \(error.localizedDescription)")
             return
         }
 
@@ -302,7 +325,7 @@ enum PatchProjectLibrary {
             }
             try fileManager.createDirectory(at: preloadedRoot, withIntermediateDirectories: true)
         } catch {
-            log("preload: failed to clear stale preloaded cache — \(error.localizedDescription)")
+            wq_log_message("preload: failed to clear stale preloaded cache — \(error.localizedDescription)")
         }
 
         var bundleURLs: [URL] = []
@@ -316,9 +339,9 @@ enum PatchProjectLibrary {
                 if let recursive = try? fileManager.recursiveFiles(in: preloadedRoot, matchingExtension: "3105") {
                     bundleURLs += recursive.filter { $0.path.contains("/Preloaded/") || $0.deletingLastPathComponent().lastPathComponent == "Preloaded" }
                 }
-                log("preload: extracted bundled Preloaded.tendies archive into cache")
+                wq_log_message("preload: extracted bundled Preloaded.tendies archive into cache")
             } catch {
-                log("preload: failed to extract bundled archive — \(error.localizedDescription)")
+                wq_log_message("preload: failed to extract bundled archive — \(error.localizedDescription)")
             }
         }
 
@@ -349,13 +372,12 @@ enum PatchProjectLibrary {
         }
 
         guard !bundleURLs.isEmpty else {
-            log("preload: no bundled .3105 files found in app resources")
+            wq_log_message("preload: no bundled .3105 files found in app resources")
             return
         }
 
         // Preserve folder structure inside the Preloaded resource directory when copying into cache.
         let uniqueBundleURLs = Dictionary(uniqueKeysWithValues: bundleURLs.map { ($0.path, $0) }).values
-        let bundleNames = Set(uniqueBundleURLs.map { $0.lastPathComponent })
 
         for sourceURL in uniqueBundleURLs.sorted(by: { $0.path < $1.path }) {
             // Compute relative path components after the "Preloaded" segment so we can recreate subfolders
@@ -375,9 +397,9 @@ enum PatchProjectLibrary {
                     try fileManager.removeItem(at: destinationURL)
                 }
                 try fileManager.copyItem(at: sourceURL, to: destinationURL)
-                log("preload: copied bundled package \(sourceURL.lastPathComponent) to cache as \(destinationURL.path)")
+                wq_log_message("preload: copied bundled package \(sourceURL.lastPathComponent) to cache as \(destinationURL.path)")
             } catch {
-                log("preload: failed to copy \(sourceURL.lastPathComponent) — \(error.localizedDescription)")
+                wq_log_message("preload: failed to copy \(sourceURL.lastPathComponent) — \(error.localizedDescription)")
             }
         }
 
@@ -392,5 +414,30 @@ enum PatchProjectLibrary {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .prefix(80)
         return result.isEmpty ? "Patch" : String(result)
+    }
+}
+
+extension FileManager {
+    func recursiveFiles(in directory: URL, matchingExtension fileExtension: String) throws -> [URL] {
+        let keys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+        guard let enumerator = enumerator(
+            at: directory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var files: [URL] = []
+        for case let url as URL in enumerator {
+            let values = try url.resourceValues(forKeys: Set(keys))
+            guard values.isRegularFile == true,
+                  values.isSymbolicLink != true,
+                  url.pathExtension.localizedCaseInsensitiveCompare(fileExtension) == .orderedSame else {
+                continue
+            }
+            files.append(url)
+        }
+        return files
     }
 }

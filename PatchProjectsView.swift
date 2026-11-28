@@ -2,10 +2,14 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-struct AppTheme {
-    static let accent = Color.accentColor
-    static let emptyIconSize: CGFloat = 30
-    static let pageInset: CGFloat = 16
+@MainActor
+@objc(WQExternalPatchViewFactory)
+final class WQExternalPatchViewFactory: NSObject {
+    @objc static func makeViewController() -> UIViewController {
+        let coordinator = PatchDraftCoordinator()
+        let view = PatchProjectsView().environmentObject(coordinator)
+        return UIHostingController(rootView: view)
+    }
 }
 
 struct AppLanguage {
@@ -24,7 +28,7 @@ struct AppLanguage {
     ]
 
     func text(_ key: String) -> String {
-        let localized = Bundle.main.localizedString(forKey: key, value: nil, table: "PatchLocalizable")
+        let localized = WQLocalized(key)
         if localized != key { return localized }
         if let fallback = Self.fallbackStrings[key] { return fallback }
         return (key.components(separatedBy: ".").last ?? key)
@@ -71,6 +75,19 @@ struct PatchProjectDraft {
     }
 }
 
+enum AppTheme {
+    static let accent = Color.accentColor
+    static let pageInset: CGFloat = 16
+    static let emptyIconSize: CGFloat = 30
+}
+
+enum AudioFeedback {
+    static func play(isEnabled: Bool) {
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.notificationOccurred(isEnabled ? .success : .warning)
+    }
+}
+
 struct FileDocumentPicker: UIViewControllerRepresentable {
     let allowedContentTypes: [UTType]
     let copiesSelectedDocument: Bool
@@ -81,7 +98,7 @@ struct FileDocumentPicker: UIViewControllerRepresentable {
     init(
         allowedContentTypes: [UTType] = [.item],
         copiesSelectedDocument: Bool = false,
-        allowsMultipleSelection: Bool = true,
+        allowsMultipleSelection: Bool,
         onSelection: @escaping (Result<[URL], Error>) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -101,12 +118,16 @@ struct FileDocumentPicker: UIViewControllerRepresentable {
             forOpeningContentTypes: allowedContentTypes,
             asCopy: copiesSelectedDocument
         )
-        picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = allowsMultipleSelection
+        picker.shouldShowFileExtensions = true
         return picker
     }
 
-    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
+    func updateUIViewController(
+        _ uiViewController: UIDocumentPickerViewController,
+        context: Context
+    ) {}
 
     final class Coordinator: NSObject, UIDocumentPickerDelegate {
         private let onSelection: (Result<[URL], Error>) -> Void
@@ -120,49 +141,16 @@ struct FileDocumentPicker: UIViewControllerRepresentable {
             self.onCancel = onCancel
         }
 
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        func documentPicker(
+            _ controller: UIDocumentPickerViewController,
+            didPickDocumentsAt urls: [URL]
+        ) {
             onSelection(.success(urls))
         }
 
         func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
             onCancel()
         }
-    }
-}
-
-extension FileManager {
-    func recursiveFiles(in root: URL, matchingExtension fileExtension: String) throws -> [URL] {
-        var isDirectory: ObjCBool = false
-        guard fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue,
-              let enumerator = enumerator(
-                  at: root,
-                  includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
-                  options: [.skipsHiddenFiles]
-              ) else {
-            return []
-        }
-
-        var files: [URL] = []
-        for case let url as URL in enumerator {
-            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
-            guard values.isRegularFile == true,
-                  values.isSymbolicLink != true,
-                  url.pathExtension.caseInsensitiveCompare(fileExtension) == .orderedSame else {
-                continue
-            }
-            files.append(url)
-        }
-        return files
-    }
-}
-
-@MainActor
-@objc(WQExternalPatchViewFactory)
-final class WQExternalPatchViewFactory: NSObject {
-    @objc static func makeViewController() -> UIViewController {
-        let coordinator = PatchDraftCoordinator()
-        let view = PatchProjectsView().environmentObject(coordinator)
-        return UIHostingController(rootView: view)
     }
 }
 
@@ -179,6 +167,11 @@ struct PatchProjectsView: View {
     @State private var showCreate = false
     @State private var showImporter = false
     @State private var searchText = ""
+    @State private var selectedID: UUID?
+    @State private var isWorkingAction = false
+    @State private var receiptRefresh = UUID()
+    @State private var actionAlert: PatchStoreAlert?
+    @State private var restoreFailureCounts: [UUID: Int] = [:]
     @State private var selectedGroup: String? = nil
     @State private var selectedSubgroup: String? = nil
 
@@ -226,6 +219,15 @@ struct PatchProjectsView: View {
             return cats[1]
         })
         return Array(subs).sorted()
+    }
+
+    private func refreshSelectionState() {
+        guard let selected = selectedID,
+              let item = store.items.first(where: { $0.id == selected }) else {
+            selectedID = nil
+            return
+        }
+        _ = DevicePatchService.latestReceipt(projectID: item.id)
     }
 
     init() {
@@ -346,7 +348,29 @@ struct PatchProjectsView: View {
                                 .listRowSeparator(.hidden)
                         } else {
                             ForEach(filteredItems) { item in
-                                itemRow(item)
+                                Button(action: {
+                                    if selectedID == item.id {
+                                        selectedID = nil
+                                    } else {
+                                        selectedID = item.id
+                                        refreshSelectionState()
+                                    }
+                                }) {
+                                    PatchProjectRow(item: item, language: language)
+                                        .overlay(
+                                            Group {
+                                                if selectedID == item.id {
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(AppTheme.accent, lineWidth: 2)
+                                                        .shadow(color: AppTheme.accent.opacity(0.55), radius: 10, x: 0, y: 0)
+                                                } else {
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(Color.clear, lineWidth: 0)
+                                                }
+                                            }
+                                        )
+                                }
+                                .buttonStyle(.plain)
                             }
                             .onDelete { offsets in
                                 offsets.map { filteredItems[$0] }.forEach(store.delete)
@@ -357,6 +381,128 @@ struct PatchProjectsView: View {
                     .scrollContentBackground(.hidden)
                     .background(Color.clear)
                 }
+            }
+            // Bottom action bar for selected feature (inside NavigationStack content)
+            if let sel = selectedID, let selectedItem = store.items.first(where: { $0.id == sel }) {
+                let selectedHasReceipt = DevicePatchService.latestReceipt(projectID: selectedItem.id) != nil
+                VStack(spacing: 0) {
+                    Divider()
+                    HStack(alignment: .center, spacing: 12) {
+                        let selectedTitle = selectedItem.packageURL.deletingPathExtension().lastPathComponent
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(selectedTitle.isEmpty ? (selectedItem.project?.name ?? language.text("patch.title")) : selectedTitle)
+                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+
+                            Text(selectedHasReceipt ? "ACTIVE" : "INACTIVE")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(selectedHasReceipt ? AppTheme.accent : .white.opacity(0.7))
+                                .textCase(.uppercase)
+                        }
+
+                        Spacer()
+
+                        if isWorkingAction {
+                            ProgressView()
+                                .tint(AppTheme.accent)
+                        } else if selectedItem.isLocked {
+                            Button {
+                                Task.detached(priority: .userInitiated) {
+                                    await MainActor.run { store.requestUnlock(for: selectedItem) }
+                                }
+                            } label: {
+                                Text(language.text("patch.unlock"))
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule().fill(AppTheme.accent.opacity(0.12))
+                                    )
+                                    .foregroundStyle(AppTheme.accent)
+                            }
+                        } else {
+                            Toggle("", isOn: Binding(
+                                get: { selectedHasReceipt },
+                                set: { newValue in
+                                    guard !isWorkingAction else { return }
+                                    if newValue {
+                                        Task.detached(priority: .userInitiated) {
+                                            await MainActor.run { isWorkingAction = true }
+                                            do {
+                                                let project = selectedItem.summary.schemaVersion >= 2 ? try PatchProjectLibrary.synchronizeWorkspace(item: selectedItem) : (selectedItem.project!)
+                                                _ = try await DevicePatchService.apply(project: project)
+                                                await MainActor.run {
+                                                    AudioFeedback.play(isEnabled: true)
+                                                    store.reload()
+                                                    refreshSelectionState()
+                                                    actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.applied_message")
+                                                }
+                                            } catch let error as PatchPackageError {
+                                                await MainActor.run {
+                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
+                                                }
+                                            } catch {
+                                                await MainActor.run {
+                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.apply")
+                                                }
+                                            }
+                                            await MainActor.run {
+                                                isWorkingAction = false
+                                                receiptRefresh = UUID()
+                                                refreshSelectionState()
+                                            }
+                                        }
+                                    } else {
+                                        Task.detached(priority: .userInitiated) {
+                                            await MainActor.run { isWorkingAction = true }
+                                            do {
+                                                if let receipt = DevicePatchService.latestReceipt(projectID: selectedItem.id) {
+                                                    try DevicePatchService.restore(receipt: receipt)
+                                                    await MainActor.run {
+                                                        AudioFeedback.play(isEnabled: false)
+                                                        store.reload()
+                                                        refreshSelectionState()
+                                                        actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
+                                                    }
+                                                }
+                                            } catch let error as PatchPackageError {
+                                                await MainActor.run {
+                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
+                                                }
+                                            } catch {
+                                                await MainActor.run {
+                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.restore")
+                                                }
+                                            }
+                                            await MainActor.run {
+                                                isWorkingAction = false
+                                                receiptRefresh = UUID()
+                                                refreshSelectionState()
+                                            }
+                                        }
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                            .tint(AppTheme.accent)
+                        }
+                    }
+                    .padding(.horizontal, AppTheme.pageInset)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color(red: 0.10, green: 0.18, blue: 0.26))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(AppTheme.accent.opacity(0.4), lineWidth: 1.2)
+                            )
+                    )
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 10)
+                }
+                .id(receiptRefresh)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         } // NavigationStack end
         .navigationTitle(language.text("patch.title"))
@@ -431,7 +577,7 @@ struct PatchProjectsView: View {
             )
         }
         .onAppear(perform: consumeExternalImport)
-        .onChange(of: draftCoordinator.importRequest?.id) { _ in
+        .onChange(of: draftCoordinator.importRequest?.id) {
             consumeExternalImport()
         }
     }
@@ -617,7 +763,7 @@ private struct PatchUnlockView: View {
                         .textContentType(.password)
                         .submitLabel(.done)
                         .onSubmit(unlock)
-                        .onChange(of: password) { _ in
+                        .onChange(of: password) {
                             store.clearUnlockError()
                         }
                     if let errorKey = store.unlockErrorKey {
@@ -655,9 +801,18 @@ private struct PatchProjectDetailView: View {
     let projectID: UUID
     @State private var showEditor = false
     @State private var editingRule: PatchRule?
+    @State private var showApplyConfirmation = false
+    @State private var showRestoreConfirmation = false
+    @State private var isWorking = false
+    @State private var actionAlert: PatchStoreAlert?
+    
 
     private var item: PatchLibraryItem? {
         store.items.first(where: { $0.id == projectID })
+    }
+
+    private var receipt: PatchTransactionReceipt? {
+        DevicePatchService.latestReceipt(projectID: projectID)
     }
 
     private var isWorkspaceProject: Bool {
@@ -686,10 +841,9 @@ private struct PatchProjectDetailView: View {
                         }
                         if let workspaceURL = item.workspaceURL {
                             NavigationLink {
-                                FileBrowserView(
-                                    containerPath: workspaceURL.path,
-                                    title: project.name,
-                                    bundleID: nil
+                                PatchWorkspaceBrowserView(
+                                    directoryURL: workspaceURL,
+                                    title: project.name
                                 )
                             } label: {
                                 Label(
@@ -740,6 +894,27 @@ private struct PatchProjectDetailView: View {
                     }
                 }
 
+                Section {
+                    Button {
+                        showApplyConfirmation = true
+                    } label: {
+                        actionLabel("patch.apply", systemImage: "checkmark.shield.fill")
+                    }
+                    .disabled(isWorking)
+
+                    if receipt != nil {
+                        Button(role: .destructive) {
+                            showRestoreConfirmation = true
+                        } label: {
+                            actionLabel("patch.restore", systemImage: "arrow.uturn.backward.circle")
+                        }
+                        .disabled(isWorking)
+                    }
+
+                    // Export disabled to avoid leaking .3105 files
+                } footer: {
+                    Text(language.text("patch.apply_footer"))
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -747,7 +922,9 @@ private struct PatchProjectDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                if !isWorkspaceProject {
+                if isWorking {
+                    ProgressView()
+                } else if !isWorkspaceProject {
                     Button(language.text("patch.edit")) { showEditor = true }
                         .disabled(item?.project == nil)
                 }
@@ -768,6 +945,37 @@ private struct PatchProjectDetailView: View {
                 updateRule(updatedRule)
             }
         }
+        .confirmationDialog(
+            language.text("patch.apply_confirm_title"),
+            isPresented: $showApplyConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(language.text("patch.apply")) { apply() }
+            Button(language.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(language.text("patch.apply_confirm_message"))
+        }
+        .confirmationDialog(
+            language.text("patch.restore_confirm_title"),
+            isPresented: $showRestoreConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(language.text("patch.restore"), role: .destructive) { restore() }
+            Button(language.text("common.cancel"), role: .cancel) {}
+        }
+        .alert(item: $actionAlert) { alert in
+            Alert(
+                title: Text(language.text(alert.titleKey)),
+                message: Text(alert.message(language: language)),
+                dismissButton: .default(Text(language.text("common.ok")))
+            )
+        }
+        
+    }
+
+    private func actionLabel(_ key: String, systemImage: String) -> some View {
+        Label(language.text(key), systemImage: systemImage)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func ruleSummary(_ rule: PatchRule) -> some View {
@@ -810,7 +1018,69 @@ private struct PatchProjectDetailView: View {
         }
     }
 
+    private func apply() {
+        guard let item, let baseProject = item.project else { return }
+        isWorking = true
+        Task.detached(priority: .userInitiated) {
+            do {
+                let project = item.summary.schemaVersion >= 2
+                    ? try PatchProjectLibrary.synchronizeWorkspace(item: item)
+                    : baseProject
+                _ = try await DevicePatchService.apply(project: project)
+                await MainActor.run {
+                    AudioFeedback.play(isEnabled: true)
+                    store.reload()
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.applied_message")
+                }
+            } catch let error as PatchPackageError {
+                await MainActor.run {
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(
+                        titleKey: "common.failed",
+                        messageKey: error.localizationKey,
+                        messageArgument: error.localizationArgument
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.apply")
+                }
+            }
+        }
+    }
+
     // Export functionality removed to avoid accidental leaking of .3105 packages.
+
+    private func restore() {
+        guard let receipt else { return }
+        isWorking = true
+        Task.detached(priority: .userInitiated) {
+            do {
+                try DevicePatchService.restore(receipt: receipt)
+                await MainActor.run {
+                    AudioFeedback.play(isEnabled: false)
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
+                }
+            } catch let error as PatchPackageError {
+                await MainActor.run {
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(
+                        titleKey: "common.failed",
+                        messageKey: error.localizationKey,
+                        messageArgument: error.localizationArgument
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    isWorking = false
+                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.restore")
+                }
+            }
+        }
+    }
 }
 
 private struct PatchShareRequest: Identifiable {
@@ -829,4 +1099,92 @@ private struct PatchActivityView: UIViewControllerRepresentable {
         _ uiViewController: UIActivityViewController,
         context: Context
     ) {}
+}
+
+private struct PatchWorkspaceBrowserView: View {
+    private struct Entry: Identifiable {
+        let url: URL
+        let isDirectory: Bool
+        let fileSize: Int?
+
+        var id: String { url.path }
+    }
+
+    let directoryURL: URL
+    let title: String
+    @State private var entries: [Entry] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            if let errorMessage {
+                Text(errorMessage)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(entries) { entry in
+                if entry.isDirectory {
+                    NavigationLink {
+                        PatchWorkspaceBrowserView(
+                            directoryURL: entry.url,
+                            title: entry.url.lastPathComponent
+                        )
+                    } label: {
+                        Label(entry.url.lastPathComponent, systemImage: "folder")
+                    }
+                } else {
+                    HStack {
+                        Label(entry.url.lastPathComponent, systemImage: "doc")
+                        Spacer()
+                        if let fileSize = entry.fileSize {
+                            Text(ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: reload)
+    }
+
+    private func reload() {
+        do {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [
+                    .isDirectoryKey,
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                    .fileSizeKey
+                ],
+                options: [.skipsHiddenFiles]
+            )
+            entries = urls.compactMap { url in
+                guard let values = try? url.resourceValues(forKeys: [
+                    .isDirectoryKey,
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                    .fileSizeKey
+                ]), values.isSymbolicLink != true,
+                    values.isDirectory == true || values.isRegularFile == true else {
+                    return nil
+                }
+                return Entry(
+                    url: url,
+                    isDirectory: values.isDirectory == true,
+                    fileSize: values.fileSize
+                )
+            }.sorted {
+                if $0.isDirectory != $1.isDirectory { return $0.isDirectory }
+                return $0.url.lastPathComponent.localizedCaseInsensitiveCompare($1.url.lastPathComponent) == .orderedAscending
+            }
+            errorMessage = nil
+        } catch {
+            entries = []
+            errorMessage = error.localizedDescription
+        }
+    }
 }

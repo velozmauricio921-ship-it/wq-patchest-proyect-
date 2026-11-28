@@ -117,11 +117,13 @@ PATCH_SWIFT_OBJECT="$OUT/WQPatchProjects.o"
 xcrun --sdk iphoneos swiftc -target "$SWIFT_TARGET" -sdk "$SDK" \
     -module-name WQPatchProjects -parse-as-library -whole-module-optimization -O \
     -swift-version 5 -warnings-as-errors -module-cache-path "$OUT/ModuleCache" \
+    -import-objc-header PatchProjects-Bridging-Header.h \
     -emit-module -emit-module-path "$OUT/WQPatchProjects.swiftmodule" \
     -emit-object -emit-objc-header-path "$OUT/WQPatchProjects-Swift.h" \
     PatchProjectModels.swift PatchPackageCodec.swift PatchKeyStore.swift \
     PatchWorkspaceService.swift PatchProjectLibrary.swift PatchProjectStore.swift \
-    PatchDraftCoordinator.swift PatchProjectEditorView.swift PatchProjectsView.swift \
+    PatchTransaction.swift DevicePatchService.swift PatchDraftCoordinator.swift \
+    PatchProjectEditorView.swift PatchProjectsView.swift \
     -o "$PATCH_SWIFT_OBJECT"
 [[ -f "$PATCH_SWIFT_OBJECT" ]] || fail "swiftc wrote no PatchProjects object"
 xcrun --sdk iphoneos clang -fobjc-arc -fmodules -fmodules-cache-path="$OUT/ModuleCache" -arch arm64 \
