@@ -64,6 +64,7 @@ enum PatchTransaction {
         backupRoot: URL,
         containerResolver: (String) throws -> URL,
         beforeWrite: ((Int) throws -> Void)? = nil,
+        requestAccess: ((URL) -> Void)? = nil,
         fileManager: FileManager = .default
     ) throws -> PatchTransactionReceipt {
         guard !project.rules.isEmpty || !project.directories.isEmpty else {
@@ -109,6 +110,7 @@ enum PatchTransaction {
                 relativePath: relativePath,
                 containerRoot: root
             )
+            prepareWQAccess(to: target, containerRoot: root, requestAccess: requestAccess)
             try validateDirectoryTarget(
                 target,
                 relativePath: relativePath,
@@ -131,6 +133,7 @@ enum PatchTransaction {
                 relativePath: rule.relativePath,
                 containerRoot: root
             )
+            prepareWQAccess(to: target, containerRoot: root, requestAccess: requestAccess)
             let targetKey = target.path
             guard targetKeys.insert(targetKey).inserted else {
                 throw PatchPackageError.duplicateTarget
@@ -209,13 +212,20 @@ enum PatchTransaction {
 
         do {
             for resolved in resolvedDirectories where !fileManager.fileExists(atPath: resolved.target.path) {
+                prepareWQAccess(
+                    to: resolved.target.deletingLastPathComponent(),
+                    containerRoot: resolved.containerRoot,
+                    requestAccess: requestAccess
+                )
                 try fileManager.createDirectory(
                     at: resolved.target,
                     withIntermediateDirectories: false
                 )
+                prepareWQAccess(to: resolved.target, containerRoot: resolved.containerRoot, requestAccess: requestAccess)
             }
             for (index, resolved) in resolvedRules.enumerated() {
                 try beforeWrite?(index)
+                prepareWQAccess(to: resolved.target, containerRoot: resolved.containerRoot, requestAccess: requestAccess)
                 try atomicWrite(
                     resolved.rule.replacementData,
                     to: resolved.target,
@@ -255,6 +265,7 @@ enum PatchTransaction {
     static func restore(
         receipt: PatchTransactionReceipt,
         containerResolver: (String) throws -> URL,
+        requestAccess: ((URL) -> Void)? = nil,
         fileManager: FileManager = .default
     ) throws {
         var journal: Journal
@@ -346,7 +357,7 @@ enum PatchTransaction {
         createdDirectories: [DirectoryRecord],
         fileManager: FileManager
     ) throws {
-        var resolvedTargets: [(Record, URL)] = []
+        var resolvedTargets: [(Record, URL, URL)] = []
         for record in records {
             guard let root = roots[record.bundleID],
                   containerFingerprint(root) == record.containerFingerprint else {
@@ -356,6 +367,7 @@ enum PatchTransaction {
                 relativePath: record.relativePath,
                 containerRoot: root
             )
+            prepareWQAccess(to: target, containerRoot: root, requestAccess: requestAccess)
             try validateFileTarget(
                 target,
                 relativePath: record.relativePath,
@@ -381,10 +393,11 @@ enum PatchTransaction {
                     throw PatchPackageError.restoreFailed
                 }
             }
-            resolvedTargets.append((record, target))
+            resolvedTargets.append((record, target, root))
         }
 
-        for (record, target) in resolvedTargets.reversed() {
+        for (record, target, root) in resolvedTargets.reversed() {
+            prepareWQAccess(to: target, containerRoot: root, requestAccess: requestAccess)
             if record.originalExisted {
                 let backup = transactionDirectory.appendingPathComponent(record.backupFilename!)
                 try atomicCopy(backup, to: target, fileManager: fileManager)
@@ -402,6 +415,7 @@ enum PatchTransaction {
                 relativePath: directory.relativePath,
                 containerRoot: root
             )
+            prepareWQAccess(to: target, containerRoot: root, requestAccess: requestAccess)
             guard fileManager.fileExists(atPath: target.path) else { continue }
             let values = try target.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
             guard values.isSymbolicLink != true, values.isDirectory == true else {
@@ -482,6 +496,25 @@ enum PatchTransaction {
         let leftDepth = lhs.filter { $0 == "/" }.count
         let rightDepth = rhs.filter { $0 == "/" }.count
         return leftDepth == rightDepth ? lhs < rhs : leftDepth < rightDepth
+    }
+
+    private static func prepareWQAccess(
+        to target: URL,
+        containerRoot: URL,
+        requestAccess: ((URL) -> Void)?
+    ) {
+        guard let requestAccess else { return }
+        let root = PatchPathValidator.canonicalFileURL(containerRoot)
+        let destination = PatchPathValidator.canonicalFileURL(target)
+        guard destination.path == root.path || destination.path.hasPrefix(root.path + "/") else { return }
+
+        requestAccess(root)
+        let relativePath = String(destination.path.dropFirst(root.path.count))
+        var current = root
+        for component in relativePath.split(separator: "/") {
+            current.appendPathComponent(String(component), isDirectory: true)
+            requestAccess(current)
+        }
     }
 
     private static func atomicWrite(

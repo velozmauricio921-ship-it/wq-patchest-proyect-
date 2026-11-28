@@ -15,7 +15,8 @@ enum DevicePatchService {
                         throw PatchPackageError.targetAppUnavailable(bundleID)
                     }
                     return root
-                }
+                },
+                requestAccess: { _ = wq_grant($0.path) }
             )
         }
     }
@@ -32,7 +33,8 @@ enum DevicePatchService {
                         throw PatchPackageError.targetAppUnavailable(bundleID)
                     }
                     return root
-                }
+                },
+                requestAccess: { _ = wq_grant($0.path) }
             )
         }
     }
@@ -104,17 +106,18 @@ enum DevicePatchService {
                 continue
             }
 
+            _ = wq_grant(root.path)
             var fileStatus = stat()
-            guard wq_stat(path, &fileStatus),
+            guard wq_stat(root.path, &fileStatus),
                                     fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
                 continue
             }
 
-            if let containerLabel = wq_container_label(path) {
+            if let containerLabel = wq_container_label(root.path) {
                 guard containerLabel == bundleID else { continue }
                 return root
             }
-            guard wq_bundle_id_for_container(path) == bundleID else { continue }
+            guard wq_bundle_id_for_container(root.path) == bundleID else { continue }
             return root
         }
         return nil
