@@ -65,21 +65,32 @@ enum ContainerStore {
         guard (try? PatchPathValidator.canonicalBundleIdentifier(bundleID)) == bundleID else {
             return nil
         }
+        if let paths = wq_ls_container_paths(nil) {
+            for path in paths where isApplicationContainerPath(path) {
+                guard wq_bundle_id_for_container(path) == bundleID,
+                      wq_grant(path) else { continue }
+                var fileStatus = stat()
+                guard wq_stat(path, &fileStatus),
+                      fileStatus.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR),
+                      wq_container_label(path) == bundleID else { continue }
+
+                let canonicalPath = ContainerDiscoveryMerger.canonicalPath(path)
+                log("patch: WQ resolved \(bundleID)")
+                return canonicalPath
+            }
+        }
+
         var lookupError: NSString?
         if let path = MCMActivateContainerPath(2, bundleID, false, &lookupError),
            isApplicationContainerPath(path) {
-            log("patch: MHA-C2 resolved \(bundleID)")
+            log("patch: MHA-C2 fallback resolved \(bundleID)")
             return path
         }
         let detail = lookupError.map(String.init) ?? "unavailable"
-        log("patch: MHA-C2 could not resolve \(bundleID), detail=\(detail)")
+        log("patch: WQ and MHA-C2 could not resolve \(bundleID), detail=\(detail)")
 
-        // Fallback for iOS builds where MCM refuses to hand out sandbox
-        // tokens (e.g. iOS 18.1.x): scan the app-data root with the inode
-        // walk and read each container's MCM metadata plist directly. The
-        // raw reads only succeed when the sandbox escape is active.
         if let scanned = resolveAppContainerPathByMetadataScan(bundleID: bundleID) {
-            log("patch: filesystem metadata scan resolved \(bundleID)")
+            log("patch: filesystem metadata fallback resolved \(bundleID)")
             return scanned
         }
         return nil
