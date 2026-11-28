@@ -127,7 +127,7 @@ enum PatchProjectLibrary {
         let preloadedNames = Set(preloadedURLs.map { $0.lastPathComponent })
         let filteredRootURLs = rootURLs.filter { url in
             guard url.pathExtension.lowercased() == "3105" else { return false }
-            guard !url.path.contains("/Preloaded/") else { return false }
+            guard !isPreloadedResource(url) else { return false }
             return !preloadedNames.contains(url.lastPathComponent)
         }
 
@@ -161,7 +161,7 @@ enum PatchProjectLibrary {
                     decoded = try PatchPackageCodec.decode(data, password: nil)
                 }
                 var categories: [String] = []
-                if let preloadIndex = url.pathComponents.firstIndex(of: "Preloaded") {
+                if let preloadIndex = url.pathComponents.firstIndex(where: isPreloadedDirectoryName) {
                     let comps = url.pathComponents
                     if preloadIndex + 1 < comps.count - 1 {
                         categories = Array(comps[(preloadIndex + 1)..<(comps.count - 1)])
@@ -337,7 +337,7 @@ enum PatchProjectLibrary {
             do {
                 try SecureZIPArchive.extract(archiveURL: archiveURL, destinationURL: preloadedRoot)
                 if let recursive = try? fileManager.recursiveFiles(in: preloadedRoot, matchingExtension: "3105") {
-                    bundleURLs += recursive.filter { $0.path.contains("/Preloaded/") || $0.deletingLastPathComponent().lastPathComponent == "Preloaded" }
+                    bundleURLs += recursive.filter(isPreloadedResource)
                 }
                 wq_log_message("preload: extracted bundled Preloaded.tendies archive into cache")
             } catch {
@@ -349,26 +349,30 @@ enum PatchProjectLibrary {
         // Important: nested folders such as `Preloaded/Free Fire/Visuals` must be traversed recursively,
         // otherwise the app only sees top-level entries and misses the actual .3105 files.
         if bundleURLs.isEmpty, let resourceRoot = Bundle.main.resourceURL {
-            let directPreloaded = resourceRoot.appendingPathComponent("Preloaded", isDirectory: true)
-            if fileManager.fileExists(atPath: directPreloaded.path),
+            if let directPreloaded = preloadedResourceDirectory(in: resourceRoot, fileManager: fileManager),
                let recursive = try? fileManager.recursiveFiles(in: directPreloaded, matchingExtension: "3105") {
-                bundleURLs += recursive.filter { $0.path.contains("/Preloaded/") }
+                bundleURLs += recursive.filter(isPreloadedResource)
             }
 
             if bundleURLs.isEmpty,
                let recursive = try? fileManager.recursiveFiles(in: resourceRoot, matchingExtension: "3105") {
-                bundleURLs += recursive.filter { $0.path.contains("/Preloaded/") || $0.deletingLastPathComponent().lastPathComponent == "Preloaded" }
+                bundleURLs += recursive.filter(isPreloadedResource)
             }
         }
 
-        if bundleURLs.isEmpty,
-           let nestedResourceURLs = Bundle.main.urls(forResourcesWithExtension: "3105", subdirectory: "Preloaded") {
-            bundleURLs += nestedResourceURLs
+        for subdirectory in ["preloaded", "Preloaded"] where bundleURLs.isEmpty {
+            if let nestedResourceURLs = Bundle.main.urls(
+                forResourcesWithExtension: "3105",
+                subdirectory: subdirectory
+            ) {
+                bundleURLs += nestedResourceURLs
+            }
         }
 
-        if bundleURLs.isEmpty,
-           let paths = Bundle.main.paths(forResourcesOfType: "3105", inDirectory: "Preloaded") as [String]? {
-            bundleURLs += paths.map { URL(fileURLWithPath: $0) }
+        for directory in ["preloaded", "Preloaded"] where bundleURLs.isEmpty {
+            if let paths = Bundle.main.paths(forResourcesOfType: "3105", inDirectory: directory) as [String]? {
+                bundleURLs += paths.map { URL(fileURLWithPath: $0) }
+            }
         }
 
         guard !bundleURLs.isEmpty else {
@@ -383,7 +387,7 @@ enum PatchProjectLibrary {
             // Compute relative path components after the "Preloaded" segment so we can recreate subfolders
             let comps = sourceURL.pathComponents
             var destinationURL: URL
-            if let preloadIndex = comps.firstIndex(of: "Preloaded"), preloadIndex + 1 < comps.count {
+            if let preloadIndex = comps.firstIndex(where: isPreloadedDirectoryName), preloadIndex + 1 < comps.count {
                 let relative = comps[(preloadIndex + 1)...].joined(separator: "/")
                 destinationURL = preloadedRoot.appendingPathComponent(relative)
             } else {
@@ -405,6 +409,28 @@ enum PatchProjectLibrary {
 
         // Intentionally left harmless: we do not delete user-facing patch files here.
         // Only the canonical `Preloaded` cache is installed so that existing patches remain intact.
+    }
+
+    private static func isPreloadedDirectoryName(_ component: String) -> Bool {
+        component.caseInsensitiveCompare("Preloaded") == .orderedSame
+    }
+
+    private static func isPreloadedResource(_ url: URL) -> Bool {
+        url.pathComponents.contains(where: isPreloadedDirectoryName)
+    }
+
+    private static func preloadedResourceDirectory(
+        in resourceRoot: URL,
+        fileManager: FileManager
+    ) -> URL? {
+        for name in ["preloaded", "Preloaded"] {
+            let directory = resourceRoot.appendingPathComponent(name, isDirectory: true)
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return directory
+            }
+        }
+        return nil
     }
 
     private static func sanitizedFilename(_ rawName: String) -> String {
