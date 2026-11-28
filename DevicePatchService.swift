@@ -110,13 +110,11 @@ enum DevicePatchService {
                 continue
             }
 
-                        let launchServicesBundleID = wq_bundle_id_for_container(path)
-                        let containerLabel = wq_container_label(path)
-                        guard (launchServicesBundleID == bundleID || containerLabel == bundleID),
-                                    launchServicesBundleID == nil || launchServicesBundleID == bundleID,
-                                    containerLabel == nil || containerLabel == bundleID else {
-                                continue
-                        }
+            if let containerLabel = wq_container_label(path) {
+                guard containerLabel == bundleID else { continue }
+                return root
+            }
+            guard wq_bundle_id_for_container(path) == bundleID else { continue }
             return root
         }
         return nil
