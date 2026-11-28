@@ -168,9 +168,9 @@ struct PatchProjectsView: View {
     @State private var showImporter = false
     @State private var searchText = ""
     @State private var selectedID: UUID?
+    @State private var selectedHasReceipt = false
     @State private var isWorkingAction = false
     @State private var receiptRefresh = UUID()
-    @State private var actionAlert: PatchStoreAlert?
     @State private var restoreFailureCounts: [UUID: Int] = [:]
     @State private var selectedGroup: String? = nil
     @State private var selectedSubgroup: String? = nil
@@ -225,9 +225,10 @@ struct PatchProjectsView: View {
         guard let selected = selectedID,
               let item = store.items.first(where: { $0.id == selected }) else {
             selectedID = nil
+                        selectedHasReceipt = false
             return
         }
-        _ = DevicePatchService.latestReceipt(projectID: item.id)
+                selectedHasReceipt = DevicePatchService.latestReceipt(projectID: item.id) != nil
     }
 
     init() {
@@ -384,7 +385,6 @@ struct PatchProjectsView: View {
             }
             // Bottom action bar for selected feature (inside NavigationStack content)
             if let sel = selectedID, let selectedItem = store.items.first(where: { $0.id == sel }) {
-                let selectedHasReceipt = DevicePatchService.latestReceipt(projectID: selectedItem.id) != nil
                 VStack(spacing: 0) {
                     Divider()
                     HStack(alignment: .center, spacing: 12) {
@@ -436,15 +436,15 @@ struct PatchProjectsView: View {
                                                     AudioFeedback.play(isEnabled: true)
                                                     store.reload()
                                                     refreshSelectionState()
-                                                    actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.applied_message")
+                                                    store.alert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.applied_message")
                                                 }
                                             } catch let error as PatchPackageError {
                                                 await MainActor.run {
-                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
+                                                    store.alert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
                                                 }
                                             } catch {
                                                 await MainActor.run {
-                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.apply")
+                                                    store.alert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.apply")
                                                 }
                                             }
                                             await MainActor.run {
@@ -463,16 +463,16 @@ struct PatchProjectsView: View {
                                                         AudioFeedback.play(isEnabled: false)
                                                         store.reload()
                                                         refreshSelectionState()
-                                                        actionAlert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
+                                                        store.alert = PatchStoreAlert(titleKey: "common.done", messageKey: "patch.restored_message")
                                                     }
                                                 }
                                             } catch let error as PatchPackageError {
                                                 await MainActor.run {
-                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
+                                                    store.alert = PatchStoreAlert(titleKey: "common.failed", messageKey: error.localizationKey, messageArgument: error.localizationArgument)
                                                 }
                                             } catch {
                                                 await MainActor.run {
-                                                    actionAlert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.restore")
+                                                    store.alert = PatchStoreAlert(titleKey: "common.failed", messageKey: "patch.error.restore")
                                                 }
                                             }
                                             await MainActor.run {
