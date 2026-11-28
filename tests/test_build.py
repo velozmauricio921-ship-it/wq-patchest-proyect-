@@ -45,9 +45,9 @@ if [ "$1" = "--sdk" ] && [ "$3" = "swiftc" ]; then
         if [ "$previous" = "-emit-const-values-path" ]; then constants=$argument; fi
         previous=$argument
     done
-    test -n "$output" && test -n "$constants"
+    test -n "$output"
     printf 'fixture object\n' > "$output"
-    printf '[]\n' > "$constants"
+    if [ -n "$constants" ]; then printf '[]\n' > "$constants"; fi
     exit 0
 fi
 if [ "$1" = "appintentsmetadataprocessor" ]; then
@@ -182,11 +182,17 @@ class StagedBuildTests(unittest.TestCase):
             root = Path(directory)
             project = root / "project"
             project.mkdir()
-            for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift"):
+            for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift", "WQ3105Reader.swift", "WQ3105Reader.h", "PatchProjects-Bridging-Header.h"):
                 shutil.copy2(ROOT / name, project / name)
             (project / "icons").mkdir()
             for name in ("AppIcon1024.png", "AppIcon1024-dark.png", "AppIcon1024-tinted.png"):
                 (project / "icons" / name).write_bytes(b"fixture icon")
+            (project / "preloaded").mkdir()
+            (project / "preloaded" / "sample.3105").write_bytes(b"3105 fixture")
+            for category in ("drag", "neck", "body", "clean"):
+                folder = project / "resource" / category
+                folder.mkdir(parents=True)
+                (folder / "sample.dat").write_bytes(category.encode("ascii"))
             environment = self._fake_environment(root)
             environment.pop("WQFILES_FINAL_IPA", None)
             result = subprocess.run(
@@ -196,11 +202,15 @@ class StagedBuildTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((project / "WQFiles.ipa").is_file())
             self.assertFalse((root / "WQFiles.ipa").exists())
+            with zipfile.ZipFile(project / "WQFiles.ipa") as archive:
+                self.assertIn("Payload/WQFiles.app/preloaded/sample.3105", archive.namelist())
+                for category in ("drag", "neck", "body", "clean"):
+                    self.assertIn(f"Payload/WQFiles.app/resource/{category}/sample.dat", archive.namelist())
 
     def _project_copy(self, root: Path, runner: str | None, executable: bool = True) -> Path:
         project = root / "project"
         project.mkdir()
-        for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift"):
+        for name in ("build.sh", "Info.plist", "entitlements.plist", "WQShortcuts.swift", "WQ3105Reader.swift", "WQ3105Reader.h", "PatchProjects-Bridging-Header.h"):
             shutil.copy2(ROOT / name, project / name)
         (project / "icons").mkdir()
         for name in ("AppIcon1024.png", "AppIcon1024-dark.png", "AppIcon1024-tinted.png"):
@@ -287,6 +297,38 @@ class StagedBuildTests(unittest.TestCase):
             self.assertEqual(minimum, "26.0")
             targets = [a for a in arguments if a.startswith("-miphoneos-version-min=")]
             self.assertEqual(targets, ["-miphoneos-version-min=26.0"])
+            self.assertIn("CryptoKit", arguments)
+
+    def test_keyauth_gate_is_compiled_and_pipeline_uses_existing_names(self):
+        build = BUILD.read_text(encoding="utf-8")
+        workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        self.assertIn("WQAuthGate.m", build)
+        self.assertIn("KEYAUTH_SECRET", workflow)
+        self.assertIn("KEYAUTH_OWNER_ID", workflow)
+        self.assertIn("KEYAUTH_APP_NAME", workflow)
+        source_info = plistlib.loads((ROOT / "Info.plist").read_bytes())
+        self.assertNotIn("WQKeyAuthSecret", source_info)
+
+    def test_keyauth_values_are_injected_only_into_built_app(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            final = root / "release" / "WQFiles.ipa"
+            final.parent.mkdir()
+            environment = self._fake_environment(root)
+            environment["WQFILES_FINAL_IPA"] = str(final)
+            environment["KEYAUTH_SECRET"] = "fixture-secret-not-real"
+            environment["KEYAUTH_OWNER_ID"] = "fixture-owner"
+            environment["KEYAUTH_APP_NAME"] = "fixture-app"
+            result = subprocess.run(
+                [str(BUILD)], cwd=ROOT, env=environment,
+                text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(final) as archive:
+                info = plistlib.loads(archive.read("Payload/WQFiles.app/Info.plist"))
+            self.assertEqual(info["WQKeyAuthSecret"], "fixture-secret-not-real")
+            self.assertEqual(info["WQKeyAuthOwnerID"], "fixture-owner")
+            self.assertEqual(info["WQKeyAuthAppName"], "fixture-app")
 
     def test_success_publishes_only_a_validated_zip(self):
         with tempfile.TemporaryDirectory() as directory:

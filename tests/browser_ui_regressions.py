@@ -3,10 +3,10 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-main = (ROOT / "main.m").read_text()
-sharing = (ROOT / "WQSharing.m").read_text()
-ui = (ROOT / "WQUI.m").read_text()
-header = (ROOT / "WQSharing.h").read_text()
+main = (ROOT / "main.m").read_text(encoding="utf-8")
+sharing = (ROOT / "WQSharing.m").read_text(encoding="utf-8")
+ui = (ROOT / "WQUI.m").read_text(encoding="utf-8")
+header = (ROOT / "WQSharing.h").read_text(encoding="utf-8")
 
 
 def require(text: str, needle: str, label: str) -> None:
@@ -53,7 +53,7 @@ require(text_save, "wq_write_if_unchanged_get_version", "descriptor-verified tex
 forbid(text_save, "wq_file_version(", "post-write pathname version adoption")
 
 require(header, "void wq_share_cancel(UIViewController *host);", "share cancellation API")
-cache = (ROOT / "WQCache.m").read_text()
+cache = (ROOT / "WQCache.m").read_text(encoding="utf-8")
 require(cache, "_cleanRequiresRescan", "clean requires rescan after a validation failure")
 require(cache, "item.selected = !item.limited", "limited cache rows are not selected")
 require(cache, "if (item.crashLogs)", "crash-log context menu branch")
@@ -82,11 +82,18 @@ require(sharing, "wq_alert_action(@\"Cancel\"", "folder share cancel action")
 clear_preparation = sharing.split("static void wq_clear_preparation", 1)[1].split("static BOOL wq_present_share", 1)[0]
 require(clear_preparation, "if (!host) return;", "nil weak host association guard")
 
+require(main, 'current.isDir ? WQLocalizedNullable(@"Copy to Folder…") : WQLocalizedNullable(@"Copy")', "file copy is distinct from folder copy")
+require(main, "S_ISDIR(currentSource.st_mode) ? wq_copy_tree_new(source, copyDestination, nil, error)\n                                                      : wq_create_file_from(copyDestination, source, error)", "regular-file copy copies file contents")
+require(main, '@"Replace existing file?"', "copy collision asks before replacing")
+require(main, 'wq_alert_action(@"Cancel", UIAlertActionStyleCancel, nil)', "copy collision can be cancelled")
+require(main, "wq_write_from_file_if_unchanged(destination, source, destinationVersion, error)", "replace backs up and revalidates the destination")
+require(main, "gate.onAuthenticated = ^(NSURL *pendingURL)", "KeyAuth opens the app after successful login")
+require(main, "gate.onAuthenticationExpired = ^", "KeyAuth expiration returns to the login gate")
 print("browser UI regression checks: PASS")
 
 # App backups never come out empty because access wasn't there yet, and an
 # empty backup is never restored (it would empty the app's data).
-apps = (ROOT / "WQApps.m").read_text()
+apps = (ROOT / "WQApps.m").read_text(encoding="utf-8")
 require(apps, "NSArray<NSString *> *top = wq_list(container, &listError);", "backup lists the container before choosing parts")
 forbid(apps, "errno == ENOENT) continue;   // the app has none", "part skipped on an ENOENT that may be a missing token")
 require(apps, "if (!parts.count) {", "empty backups are refused on restore")
